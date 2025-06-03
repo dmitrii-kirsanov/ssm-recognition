@@ -8,7 +8,7 @@ PRETRAINED_WEIGHTS_PATH = "./data/weights"
 
 model = Model()
 model.load_state_dict(torch.load(
-    os.path.join(PRETRAINED_WEIGHTS_PATH, "on_299_v_1.11_e_049_iou_0.8529.pth"),
+    os.path.join(PRETRAINED_WEIGHTS_PATH, "v_1.11_e_058_iou_0.8741.pth"),
     weights_only=True)
 )
 model.to("cuda")
@@ -67,19 +67,10 @@ def show_webcam(mirror=False):
         if mirror:
             img = cv2.flip(img, 1)
 
-        _img = cv2.resize(img, (224, 224))
-
-        img_tensor = torch.Tensor(_img).permute(2, 0, 1)
-        img_tensor = img_tensor.unsqueeze(0).unsqueeze(0).cuda()
-        # print(img_tensor.shape)
-        img_tensor[:, :, 0, :, :] = (img_tensor[:, :, 0, :, :] / 255.0 - 0.485) / 0.229  # R
-        img_tensor[:, :, 1, :, :] = (img_tensor[:, :, 1, :, :] / 255.0 - 0.456) / 0.224  # G
-        img_tensor[:, :, 2, :, :] = (img_tensor[:, :, 2, :, :] / 255.0 - 0.485) / 0.225  # B
-
         with torch.no_grad():
-            output = model(img_tensor)
+            output = model.inference(img)
         # print(output.shape)
-        img = draw_output_on_img(img, output[0, 0])
+        img = draw_output_on_img(img, output)
 
         cv2.imshow('webcam -> model', img)
         time.sleep(0.05)

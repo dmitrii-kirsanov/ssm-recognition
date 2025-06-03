@@ -90,18 +90,20 @@ class SSM_Layer(nn.Module):
         predef_Lambda, predef_P, predef_B, _ = make_DPLR_HiPPO(self.N)
         predef_Lambda, predef_P, predef_B = predef_Lambda.repeat(self.H, 1), predef_P.repeat(self.H, 1), predef_B.repeat(self.H, 1)
 
+        predef_Lambda, predef_P, predef_B = predef_Lambda.type(torch.complex128), predef_P.type(torch.complex128), predef_B.type(torch.complex128)
+
         self._P = nn.Parameter(torch.view_as_real(predef_P))
         self._Lambda = nn.Parameter(torch.view_as_real(predef_Lambda))
 
         self._B = nn.Parameter(torch.view_as_real(predef_B))
-        self._C = nn.Parameter(torch.view_as_real(torch.randn(self.H, self.N, dtype=torch.complex64)))
+        self._C = nn.Parameter(torch.view_as_real(torch.randn(self.H, self.N, dtype=torch.complex128)))
         self._D = nn.Parameter(torch.randn(self.H, 1))
         self.step = nn.Parameter(torch.Tensor([1 / self.L]))
 
         self.cnn_mode = True
         self.naive_repr = None
 
-        self.register_buffer("x_state", tensor=torch.zeros(self.H, self.N, dtype=torch.complex64))
+        self.register_buffer("x_state", tensor=torch.zeros(self.H, self.N, dtype=torch.complex128))
 
     #-----------------------------------------------------------------------------
 
@@ -225,34 +227,35 @@ if __name__ == "__main__":
     import time
 
     seq_len = 32
-    h, n = 2048, 8
+    h, n = 4, 8
 
     u = torch.randn(1, seq_len, h).cuda()
-    # print(u) # [1, seq_len, h]
 
     layer = SSM_Layer(layer_h=h, hidden_states=n, l_max=seq_len).cuda()
     layer.compile()
 
-
     print(f"{seq_len=}, {h=}, {n=}")
+
     print("-------------------------------------------------")
     _st = time.time()
     #with torch.no_grad():
-    res = layer(u)
-    loss = mse_loss(res, torch.zeros(*res.shape).cuda())
-    loss.backward()
-        #print(res.cpu().numpy())
+    with torch.amp.autocast('cuda'):
+        print(u.dtype)
+        with torch.amp.autocast('cuda', enabled=False):
+            res = layer(u)
+        print(res.dtype)
+
+    print(res.detach().cpu().numpy())
     print(f"est CNN time: {time.time() - _st}")
 
+    print("-------------------------------------------------")
 
-
-    # print("-------------------------------------------------")
-    # layer.set_RNN_mode()
-    # _st = time.time()
-    # with torch.no_grad():
-    #     for i in range(seq_len):
-    #         _u = u[:, i, :].unsqueeze(0)  # [1, 1, H]
-    #         res = layer(_u)
-    #         #print(res.cpu().numpy())
-    # print(f"est RNN time: {time.time() - _st}")
-    # print("-------------------------------------------------")
+    layer.set_RNN_mode()
+    _st = time.time()
+    with torch.no_grad():
+        for i in range(seq_len):
+            _u = u[:, i, :].unsqueeze(0)  # [1, 1, H]
+            res = layer(_u)
+            print(res.cpu().numpy())
+    print(f"est RNN time: {time.time() - _st}")
+    print("-------------------------------------------------")
