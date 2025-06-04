@@ -1,9 +1,8 @@
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torch.fft import fft, ifft, rfft, irfft
+from torch.fft import rfft, irfft
 from scipy.linalg import eigh
-from torch.nn.functional import mse_loss
 
 
 def cauchy_dot(v, omega, lambd):
@@ -221,41 +220,3 @@ class SSM_Layer(nn.Module):
             _y_no_D, self.x_state = torch.vmap(self.forward_naive_scalar, in_dims=(0, 0, 0, 0, 0))(Ab_h, Bb_h, Cb_h, self.x_state, u)
 
             return (_y_no_D.real + u @ self.D).unsqueeze(0).unsqueeze(0) #return batch и seq dims
-
-
-if __name__ == "__main__":
-    import time
-
-    seq_len = 32
-    h, n = 4, 8
-
-    u = torch.randn(1, seq_len, h).cuda()
-
-    layer = SSM_Layer(layer_h=h, hidden_states=n, l_max=seq_len).cuda()
-    layer.compile()
-
-    print(f"{seq_len=}, {h=}, {n=}")
-
-    print("-------------------------------------------------")
-    _st = time.time()
-    #with torch.no_grad():
-    with torch.amp.autocast('cuda'):
-        print(u.dtype)
-        with torch.amp.autocast('cuda', enabled=False):
-            res = layer(u)
-        print(res.dtype)
-
-    print(res.detach().cpu().numpy())
-    print(f"est CNN time: {time.time() - _st}")
-
-    print("-------------------------------------------------")
-
-    layer.set_RNN_mode()
-    _st = time.time()
-    with torch.no_grad():
-        for i in range(seq_len):
-            _u = u[:, i, :].unsqueeze(0)  # [1, 1, H]
-            res = layer(_u)
-            print(res.cpu().numpy())
-    print(f"est RNN time: {time.time() - _st}")
-    print("-------------------------------------------------")

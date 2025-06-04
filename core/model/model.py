@@ -1,3 +1,5 @@
+import os
+
 import cv2
 import torch
 
@@ -8,12 +10,16 @@ from core.model.experimental.bbox_detector import BBoxDetector
 
 @torch.compile
 class Model(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, seq_len: int, num_pred: int, num_classes: int):
         super().__init__()
-        self.backbone = Backbone2D()  # medium size # freeze ???
-        self.bbox_detector = BBoxDetector()
-        self.bbox_classifier = BBoxClassifier()
-        # self.training = True
+
+        self.seq_len = seq_len
+        self.num_pred = num_pred
+        self.num_classes = num_classes
+
+        self.backbone = Backbone2D()
+        self.bbox_detector = BBoxDetector(num_bboxes=num_pred)
+        self.bbox_classifier = BBoxClassifier(num_bboxes=num_pred, num_classes=num_classes)
 
     @property
     def device(self):
@@ -24,11 +30,11 @@ class Model(torch.nn.Module):
         x = x.view(B * SL, 3, H, W)
         p3, p4, p5 = self.backbone(x)
 
-        x_bbox = self.bbox_detector(p3, p4, p5)  # pass shape here?
+        x_bbox = self.bbox_detector(p3, p4, p5)
         x_class = self.bbox_classifier(p3, p4, p5)
 
         x = torch.cat((x_bbox, x_class), dim=-1)
-        x = x.view(B, SL, 5, 4 + 10)
+        x = x.view(B, SL, self.num_pred, 4 + self.num_classes)
 
         return x
 
@@ -46,7 +52,7 @@ class Model(torch.nn.Module):
             output = self(img_tensor)
             output = output.squeeze(0).squeeze(0)
 
-            bboxes, classes = output.split((4, 10), -1)
+            bboxes, classes = output.split((4, self.num_classes), -1)
             classes = torch.nn.functional.sigmoid(classes)
             output = torch.cat((bboxes, classes), dim=-1)
 
@@ -58,3 +64,15 @@ class Model(torch.nn.Module):
     def freeze_backbone(self, state: bool):
         for p in self.backbone.parameters():
             p.requires_grad = not state
+
+    def load(self, weights_filename, WEIGHTS_PATH="./data/weights"):
+        self.load_state_dict(torch.load(
+            os.path.join(WEIGHTS_PATH, weights_filename),
+            weights_only=True)
+        )
+
+    def save(self, weights_filename, WEIGHTS_PATH="./data/weights"):
+        torch.save(
+            self.state_dict(),
+            os.path.join(WEIGHTS_PATH, weights_filename)
+        )

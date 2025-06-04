@@ -53,9 +53,10 @@ def merge_same_person_id_bboxes(gt_json_sec):
 
 class CustomDataset(torch.utils.data.Dataset):
 
-    def __init__(self, preprocessed_directory, fps=5, seconds_seq_len=10, max_videos=5, classes_num=10, pred_max=10):
+    def __init__(self, preprocessed_directory, fps, seconds_seq_len, max_videos, classes_num, pred_max, dest_device):
         assert classes_num == 10  # top 10 implement only (see rematch_action_indices)
         self.mem = []
+        self.device = dest_device
 
         self.fps, self.seconds_seq_len = fps, seconds_seq_len
         self.dir = preprocessed_directory
@@ -76,6 +77,12 @@ class CustomDataset(torch.utils.data.Dataset):
         images, labels = self.mem[idx]
         images = [torch.Tensor(cv2.imread(image)).permute(2, 0, 1) for image in images]
         images = torch.stack(images, dim=0)
+
+        images, labels = images.to(self.device), labels.to(self.device)
+
+        images[:, 0, :, :] = (images[:, 0, :, :] / 255.0 - 0.485) / 0.229  # R
+        images[:, 1, :, :] = (images[:, 1, :, :] / 255.0 - 0.456) / 0.224  # G
+        images[:, 2, :, :] = (images[:, 2, :, :] / 255.0 - 0.485) / 0.225  # B
 
         return images, labels
 

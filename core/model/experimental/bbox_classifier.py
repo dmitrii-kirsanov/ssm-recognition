@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class BBoxClassifier(nn.Module):
-    def __init__(self, num_bboxes=5, num_classes=10):
+    def __init__(self, num_bboxes: int, num_classes: int):
         super().__init__()
         self.num_bboxes = num_bboxes
         self.num_classes = num_classes

@@ -3,8 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class BBoxDetector(nn.Module):
-    def __init__(self):
+    def __init__(self, num_bboxes: int):
         super().__init__()
+
+        self.num_bboxes = num_bboxes
 
         # Улучшенная обработка P3 (28x28)
         self.p3_conv1 = nn.Conv2d(192, 256, 3, padding=1)
@@ -21,14 +23,14 @@ class BBoxDetector(nn.Module):
         self.p5_upsample = nn.Upsample(scale_factor=2, mode='nearest')
 
         # Объединение фичей + финальные слои
-        self.fusion_conv = nn.Conv2d(768, 512, 3, padding=1)  # 256*3=768
+        self.fusion_conv = nn.Conv2d(768, 512, 3, padding=1)
         self.final_conv = nn.Conv2d(512, 256, 3, padding=1)
 
         # Head для предсказания bbox
         self.bbox_head = nn.Sequential(
             nn.Conv2d(256, 256, 3, padding=1),
             nn.ReLU(),
-            nn.Conv2d(256, 5 * 4, 1)  # 10 bbox * 4 координаты (cxcywh)
+            nn.Conv2d(256, num_bboxes * 4, 1)  # 10 bbox * 4 координаты (cxcywh)
         )
 
         # Инициализация весов
@@ -71,7 +73,7 @@ class BBoxDetector(nn.Module):
         bbox = F.adaptive_avg_pool2d(bbox, (1, 1)).flatten(1)
 
         # Reshape в [B, 10, 4]
-        bbox = bbox.view(-1, 5, 4)
+        bbox = bbox.view(-1, self.num_bboxes, 4)
 
         # Активация для координат (sigmoid для cxcy, exp для wh)
         bbox[..., :2] = torch.sigmoid(bbox[..., :2])  # cx, cy в [0, 1]
