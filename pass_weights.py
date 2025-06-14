@@ -1,11 +1,11 @@
 import torch
 from core.model.model import Model
 
-OLD_WEIGHTS_PATH = "./data/weights/v_1.02_e_001_e_0.7889.pth"
-NEW_WEIGHTS_PATH = "./data/weights/moved_v_1.02_e_001_e_0.7889.pth"
+OLD_WEIGHTS_PATH = "./data/weights/experimental_ssm_v2.20_no_blocks_iou_0.8276_cl_6.3292.pth"
+NEW_WEIGHTS_PATH = "./data/weights/experimental_ssm_v2.20_clear_ssm_blocks.pth"
 
 if __name__ == "__main__":
-    model = Model()
+    model = Model(seq_len=240*1, num_pred=5, num_classes=10)
 
     state_dict = model.state_dict()
     pretrain_state_dict = torch.load(OLD_WEIGHTS_PATH, weights_only=True, map_location=torch.device('cpu'))

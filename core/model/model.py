@@ -18,8 +18,8 @@ class Model(torch.nn.Module):
         self.num_classes = num_classes
 
         self.backbone = Backbone2D()
-        self.bbox_detector = BBoxDetector(num_bboxes=num_pred)
-        self.bbox_classifier = BBoxClassifier(num_bboxes=num_pred, num_classes=num_classes)
+        self.bbox_detector = BBoxDetector(num_bboxes=num_pred, l_max=seq_len)
+        self.bbox_classifier = BBoxClassifier(num_bboxes=num_pred, num_classes=num_classes, l_max=seq_len)
 
     @property
     def device(self):
@@ -65,10 +65,18 @@ class Model(torch.nn.Module):
         for p in self.backbone.parameters():
             p.requires_grad = not state
 
-    def load(self, weights_filename, WEIGHTS_PATH="./data/weights"):
+    def freeze_detector(self, state: bool):
+        for p in self.bbox_detector.parameters():
+            p.requires_grad = not state
+
+    def freeze_classifier(self, state: bool):
+        for p in self.bbox_classifier.parameters():
+            p.requires_grad = not state
+
+    def load(self, weights_filename, strict=True, WEIGHTS_PATH="./data/weights"):
         self.load_state_dict(torch.load(
             os.path.join(WEIGHTS_PATH, weights_filename),
-            weights_only=True)
+            weights_only=True), strict=strict
         )
 
     def save(self, weights_filename, WEIGHTS_PATH="./data/weights"):

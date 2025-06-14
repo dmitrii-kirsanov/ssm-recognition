@@ -1,0 +1,71 @@
+import torch
+from absl.testing.parameterized import parameters
+from torch import nn
+
+from core.model.ssm.ssm_layer import SSM_Layer
+
+
+class SSM_Block(nn.Module):
+    def __init__(self, seq_len: int, layer_h: int, hidden_states = 256, dropout=0.05):
+        super().__init__()
+
+        self._seq_len = seq_len
+        self._is_mode_cnn = True
+
+        self.ssm_layer = SSM_Layer(layer_h=layer_h, hidden_states=hidden_states, seq_len=seq_len)
+        self.drop = nn.Dropout(dropout)
+        self.linear = nn.Linear(layer_h, layer_h)
+
+        self.in_norm = nn.LayerNorm(layer_h)
+        self.out_norm1 = nn.LayerNorm(28 * 28)
+        self.out_norm2 = nn.LayerNorm(28 * 28)
+
+    @property
+    def seq_len(self):
+        return self._seq_len if self._is_mode_cnn else 1
+
+    #todo: handle "to CNN" mode
+    def set_mode(self, to_rnn: bool, device, parallel_width=28*28):
+        self._is_mode_cnn = not to_rnn
+        self.ssm_layer.set_RNN_mode(parallel_width=parallel_width, device=device)
+
+    def pre_transform(self, p, shape):  # [bs * seq, c, w, h] -> [bs * h * w, seq, c]
+        bs, ch, h, w = shape
+        p = p.reshape(bs // self.seq_len, self.seq_len, ch, h, w)  # bs, seq, c, h, w
+        p = p.permute(0, 3, 4, 1, 2)  # bs, h, w, seq, c
+        p = p.reshape(-1, self.seq_len, ch)  # [bs * h * w, seq, c]
+        return p
+
+    def post_transform(self, p, shape):  # [bs * h * w, seq, c] -> [bs * seq, c, w, h]
+        bs, ch, h, w = shape
+        p = p.reshape(bs // self.seq_len, h, w, ch, self.seq_len)  # [bs, h, w, seq, c]
+        p = p.permute(0, 3, 4, 1, 2)  # [bs, seq, c, h, w,]
+        p = p.reshape(-1, ch, h, w)  # [bs * seq, c, h, w,]
+        return p
+
+    def forward(self, ix):  # x: [bs, c, w, h]
+        input_shape = ix.shape
+        x = self.pre_transform(ix, input_shape)   # [bs * h * w, seq, c]
+        x = self.in_norm(x)
+
+        with torch.amp.autocast(self.linear.bias.device.type, enabled=False):
+            x = self.ssm_layer(x.float())
+
+        x = self.drop(nn.functional.gelu(x))
+        x = self.linear(x)
+        x = x * nn.functional.sigmoid(x)
+
+        x = self.drop(x)
+        x = self.post_transform(x, input_shape) # x: [bs, c, w, h]
+
+        #normalize across w*h
+        bs, c, w, h = input_shape
+        x, ix = x.reshape(bs, c, w * h), ix.reshape(bs, c, w * h)
+        x, ix = self.out_norm1(x), self.out_norm2(ix)
+        x, ix = x.reshape(bs, c, w, h), ix.reshape(bs, c, w, h)
+
+        ix = self.drop(ix)
+        x = x + ix
+        #print(torch.max(x))
+
+        return x

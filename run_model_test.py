@@ -1,18 +1,34 @@
+import numpy
 import torch
 import os
 import cv2
 import time
 from core.model.model import Model
+from core.model.ssm.ssm_block import SSM_Block
 
 PRETRAINED_WEIGHTS_PATH = "./data/weights"
 
-model = Model()
+model = Model(seq_len=320, num_pred=5, num_classes=10)
 model.load_state_dict(torch.load(
-    os.path.join(PRETRAINED_WEIGHTS_PATH, "v_1.11_e_058_iou_0.8741.pth"),
-    weights_only=True)
+    os.path.join(PRETRAINED_WEIGHTS_PATH, "experimental_ssm_v2.20_clear_ssm_blocks.pth"),
+    weights_only=True),
+    strict=True
 )
+
 model.to("cuda")
-model.training = False
+model.eval()
+model.bbox_classifier.ssm_block_1.set_mode(to_rnn=True, device="cuda")
+model.bbox_classifier.ssm_block_2.set_mode(to_rnn=True, device="cuda")
+model.bbox_detector.ssm_block_1.set_mode(to_rnn=True, device="cuda")
+model.bbox_detector.ssm_block_2.set_mode(to_rnn=True, device="cuda")
+
+As_eig = list(
+    torch.linalg.eigvals(A).real.max().item() for A in model.bbox_classifier.ssm_block_1.ssm_layer.naive_repr[0])
+print(max(As_eig))
+#exit()
+
+
+threshold = 0.65
 
 markers_info = {  # sorted accordingly to top freq
     "1": "stand",
@@ -34,11 +50,10 @@ def draw_output_on_img(cv2_image, output):
     ih, iw, ic = cv2_image.shape
 
     for _prediction in _predictions:
-        if torch.max(_prediction[4:]) < 0.65:
+        if torch.max(_prediction[4:]) < threshold:
             continue
 
         cx, cy, w, h = _prediction[0:4]
-
         cx, cy, w, h = cx * iw, cy * ih, w * iw, h * ih
 
         tl = (int(cx - w / 2), int(cy - h / 2))
@@ -51,7 +66,7 @@ def draw_output_on_img(cv2_image, output):
             pred_val = _prediction[4 + i]
             text_val = markers_info[f"{i + 1}"]
 
-            if pred_val > 0.65:
+            if pred_val > threshold:
                 cv2_image = cv2.putText(
                     cv2_image,
                     text_val, wh, cv2.FONT_HERSHEY_SIMPLEX,
@@ -61,19 +76,30 @@ def draw_output_on_img(cv2_image, output):
 
 
 def show_webcam(mirror=False):
-    cam = cv2.VideoCapture(0)
+    #cam = cv2.VideoCapture(0)
     while True:
-        ret_val, img = cam.read()
+        #ret_val, img = cam.read()
+
+        img = numpy.random.random((480, 720, 3))
+        # time.sleep(0.25)
+
         if mirror:
             img = cv2.flip(img, 1)
 
+        st = time.time()
+        print(torch.max(model.bbox_classifier.ssm_block_1.ssm_layer.x_state.real),
+              torch.min(model.bbox_classifier.ssm_block_1.ssm_layer.x_state.real))
+        # print(torch.max(model.bbox_classifier.ssm_block_2.ssm_layer.x_state.real),
+        #      torch.min(model.bbox_classifier.ssm_block_2.ssm_layer.x_state.real))
         with torch.no_grad():
             output = model.inference(img)
-        # print(output.shape)
-        img = draw_output_on_img(img, output)
+            #print(torch.max(output[:, :2]), torch.max(output[:, 2:4]), torch.max(output[:, 4:]))
+        et = time.time()
+
+        #img = draw_output_on_img(img, output)
 
         cv2.imshow('webcam -> model', img)
-        time.sleep(0.05)
+        print(f"avg time in ms: {et - st} (output check: {torch.max(output[:, :4])} \t {torch.max(output[:, 4:])})")
         if cv2.waitKey(1) == 27:
             break  # esc to quit
     cv2.destroyAllWindows()

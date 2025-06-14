@@ -2,11 +2,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from core.model.ssm.ssm_block import SSM_Block
+
+
 class BBoxDetector(nn.Module):
-    def __init__(self, num_bboxes: int):
+    def __init__(self, num_bboxes: int, l_max: int):
         super().__init__()
 
         self.num_bboxes = num_bboxes
+        self.l_max = l_max
 
         # Улучшенная обработка P3 (28x28)
         self.p3_conv1 = nn.Conv2d(192, 256, 3, padding=1)
@@ -32,6 +36,9 @@ class BBoxDetector(nn.Module):
             nn.ReLU(),
             nn.Conv2d(256, num_bboxes * 4, 1)  # 10 bbox * 4 координаты (cxcywh)
         )
+
+        self.ssm_block_1 = SSM_Block(seq_len=l_max, layer_h=256)
+        self.ssm_block_2 = SSM_Block(seq_len=l_max, layer_h=256)
 
         # Инициализация весов
         self._initialize_weights()
@@ -66,6 +73,10 @@ class BBoxDetector(nn.Module):
         x = F.relu(self.fusion_conv(p3))
         x = F.relu(self.final_conv(x))  # [B, 256, 28, 28]
 
+        # попробуем вставить тут:
+        x = self.ssm_block_1(x)
+        x = self.ssm_block_2(x)
+
         # Предсказание bbox
         bbox = self.bbox_head(x)  # [B, 40, 28, 28]
 
@@ -77,6 +88,9 @@ class BBoxDetector(nn.Module):
 
         # Активация для координат (sigmoid для cxcy, exp для wh)
         bbox[..., :2] = torch.sigmoid(bbox[..., :2])  # cx, cy в [0, 1]
-        bbox[..., 2:] = torch.exp(bbox[..., 2:])  # width, height > 0
+
+        bbox[..., 2:] = torch.sigmoid(bbox[..., 2:])
+        #too unstable
+        #bbox[..., 2:] = torch.exp(bbox[..., 2:])  # width, height > 0
 
         return bbox

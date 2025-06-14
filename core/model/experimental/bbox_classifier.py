@@ -2,11 +2,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from core.model.ssm.ssm_block import SSM_Block
+
+
 class BBoxClassifier(nn.Module):
-    def __init__(self, num_bboxes: int, num_classes: int):
+    def __init__(self, num_bboxes: int, num_classes: int, l_max: int):
         super().__init__()
         self.num_bboxes = num_bboxes
         self.num_classes = num_classes
+        self.l_max = l_max
 
         # Обработка P3 (28x28)
         self.p3_conv1 = nn.Conv2d(192, 256, 3, padding=1)
@@ -33,6 +37,8 @@ class BBoxClassifier(nn.Module):
             nn.Conv2d(256, num_bboxes * num_classes, 1)  # [B, num_bboxes*num_classes, H, W]
         )
 
+        self.ssm_block_1 = SSM_Block(seq_len=l_max, layer_h=256)
+        self.ssm_block_2 = SSM_Block(seq_len=l_max, layer_h=256)
         self._initialize_weights()
 
     def _initialize_weights(self):
@@ -62,6 +68,10 @@ class BBoxClassifier(nn.Module):
         # Финальные слои
         x = F.relu(self.fusion_conv(p3))
         x = F.relu(self.final_conv(x))  # [B, 256, 28, 28]
+
+        # попробуем вставить тут:
+        x = self.ssm_block_1(x)
+        x = self.ssm_block_2(x)
 
         # Классификация
         logits = self.classifier_head(x)  # [B, num_bboxes*num_classes, 28, 28]

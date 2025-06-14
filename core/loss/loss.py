@@ -142,4 +142,17 @@ def loss_v2(output, target, num_classes: int, _eps=1e-3, threshold_iou_for_class
     else:
         final_loss = bbox_loss * k_bbox_loss + class_loss * k_class_loss
 
-    return final_loss, avg_target_iou, class_loss.detach().clone()
+    #mAP addon
+    class_threshold = 0.7
+    with torch.no_grad():
+        output_class_prob = torch.nn.functional.sigmoid(output_class)
+        _FP = (output_class_prob > class_threshold).float() - target_class_masked.float() #размерности сходятся
+        FP = _FP * (_FP > 0).float()
+        FN = _FP * (_FP < 0).float() * (-1)
+        TP = (output_class_prob > class_threshold).float() * target_class_masked.float()
+        #FP, FN, TP = torch.sum(FP), torch.sum(FN), torch.sum(TP)
+        FP, FN, TP = torch.sum(FP.reshape(-1, num_classes), dim = 0), torch.sum(FN.reshape(-1, num_classes), dim = 0), torch.sum(TP.reshape(-1, num_classes), dim = 0)
+        precision = (TP + _eps) / (TP + FP + _eps)
+        recall = (TP + _eps) / (TP + FN + _eps)
+
+    return final_loss, avg_target_iou, class_loss.detach().clone(), precision, recall
