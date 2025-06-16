@@ -84,7 +84,7 @@ def make_DPLR_HiPPO(N):
 class SSM_Layer(nn.Module):
     x_state: torch.Tensor
 
-    def __init__(self, layer_h: int, hidden_states: int, seq_len: int) -> None:
+    def __init__(self, layer_h: int, hidden_states: int, seq_len: int, learn_A=False) -> None:
         super().__init__()
         self.H = layer_h  # размерность входых значений
         self.N = hidden_states  # количество скрытых параметров на 1 входное значение
@@ -97,14 +97,15 @@ class SSM_Layer(nn.Module):
         # todo: попробовать задать малый шаг обучения. также если оставлять, то убрать дубликацию
         self._P = nn.Parameter(torch.view_as_real(predef_P))
         self._Lambda = nn.Parameter(torch.view_as_real(predef_Lambda))
+        self.step = nn.Parameter(torch.Tensor([1 / self.L]))
 
-        self._P.requires_grad_(False)
-        self._Lambda.requires_grad_(False)
+        self._P.requires_grad_(learn_A)
+        self._Lambda.requires_grad_(learn_A)
+        self.step.requires_grad_(learn_A)
 
         self._B = nn.Parameter(torch.view_as_real(predef_B))
         self._C = nn.Parameter(torch.view_as_real(torch.randn(self.H, self.N, dtype=torch.complex64)))
         self._D = nn.Parameter(torch.randn(self.H, 1))
-        self.step = nn.Parameter(torch.Tensor([1 / self.L]))
 
         self.cnn_mode = True
         self.naive_repr = None
@@ -191,11 +192,23 @@ class SSM_Layer(nn.Module):
 
         self.naive_repr = n_AbBbCb  # .detach()
 
+    def check_stability(self):
+        temp_AbBbCb = torch.vmap(self.init_naive_scalar, in_dims=(0, 0, 0, 0, 0))(self.lambda_, self.p, self.p, self.B,
+                                                                                  self.C)
+
+        max_eig_across_As = max(torch.linalg.eigvals(A).real.max().item() for A in temp_AbBbCb[0])
+
+        if max_eig_across_As >= 1:
+            raise RuntimeError(f"one of As is unstable! (max eig val across all As is {max_eig_across_As})")
+        if max_eig_across_As >= 1 - 1e-4:
+            import warnings
+            warnings.warn(f"one of As is near stability boundary! (max eig val across all As is {max_eig_across_As})")
+        else:
+            print(f"As is stable (max eig val across all As is {max_eig_across_As})")
+
     # ---------------------------------------------------------------------------
 
     # CNN forward для 1 скалярной величины с поддержкой батчей
-
-    # @torch.compiler.disable(recursive=False)
     def forward_batched_scalar(self, lambda_, p, q, B, C, u):
         gen_func = K_gen_DPLR(lambda_, p, q, B, C, step=self.step, L=self.L)
         kernel = conv_from_gen(gen_func, self.L, lambda_.device)

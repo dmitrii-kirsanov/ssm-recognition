@@ -38,6 +38,10 @@ class Model(torch.nn.Module):
 
         return x
 
+    def check_stability(self):
+        self.bbox_detector.check_stability()
+        self.bbox_classifier.check_stability()
+
     def inference(self, cv2_input_image):
         with (torch.no_grad()):
             _img = cv2.resize(cv2_input_image, (224, 224))

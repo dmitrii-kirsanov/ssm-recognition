@@ -50,6 +50,10 @@ class BBoxDetector(nn.Module):
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
 
+    def check_stability(self):
+        self.ssm_block_1.check_stability()
+        self.ssm_block_2.check_stability()
+
     def forward(self, p3, p4, p5):
         # Обработка P5 (7x7) -> 14x14
         p5 = F.relu(self.p5_conv1(p5))
@@ -90,7 +94,7 @@ class BBoxDetector(nn.Module):
         bbox[..., :2] = torch.sigmoid(bbox[..., :2])  # cx, cy в [0, 1]
 
         bbox[..., 2:] = torch.sigmoid(bbox[..., 2:])
-        #too unstable
-        #bbox[..., 2:] = torch.exp(bbox[..., 2:])  # width, height > 0
+        # too unstable
+        # bbox[..., 2:] = torch.exp(bbox[..., 2:])  # width, height > 0
 
         return bbox

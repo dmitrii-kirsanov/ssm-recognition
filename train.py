@@ -8,14 +8,11 @@ from core.util.custom_dataset import CustomDataset
 torch.manual_seed(0)
 torch.set_float32_matmul_precision('high')  # warning recommend to do it
 
-version_name = "v3.00"
+version_name = "v3.01"
 
 criterion, batch_size = loss_v2, 1
-num_epochs, num_videos = 100, 2#299
+num_epochs, num_videos = 100, 29
 seconds_seq_len, fps = 80, 4
-# criterion, batch_size = loss_v2, 60
-# num_epochs, num_videos = 100, 299
-# seconds_seq_len, fps = 1, 1
 startup_epoch = 0
 
 classes_num, pred_num = 10, 5
@@ -74,6 +71,7 @@ for epoch_id in range(num_epochs):
     print(f"avg_prec: { list(f'{number:2.4f}' for number in avg_prec.cpu().numpy()) }")
     print(f"avg_rec: { list(f'{number:2.4f}' for number in avg_rec.cpu().numpy()) }")
 
+    model.check_stability()
     model.save(f"experimental_ssm_{version_name}_e_{epoch_id:03d}_iou_{avg_iou:4.4f}_cl_{avg_class_loss:4.4f}.pth")
     scheduler.step()
 

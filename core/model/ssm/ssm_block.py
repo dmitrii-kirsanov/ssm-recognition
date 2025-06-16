@@ -6,7 +6,7 @@ from core.model.ssm.ssm_layer import SSM_Layer
 
 
 class SSM_Block(nn.Module):
-    def __init__(self, seq_len: int, layer_h: int, hidden_states = 256, dropout=0.05):
+    def __init__(self, seq_len: int, layer_h: int, hidden_states = 64, dropout=0.05):
         super().__init__()
 
         self._seq_len = seq_len
@@ -28,6 +28,10 @@ class SSM_Block(nn.Module):
     def set_mode(self, to_rnn: bool, device, parallel_width=28*28):
         self._is_mode_cnn = not to_rnn
         self.ssm_layer.set_RNN_mode(parallel_width=parallel_width, device=device)
+
+    def check_stability(self):
+        print(f"stability of {self.__hash__()}:")
+        self.ssm_layer.check_stability()
 
     def pre_transform(self, p, shape):  # [bs * seq, c, w, h] -> [bs * h * w, seq, c]
         bs, ch, h, w = shape

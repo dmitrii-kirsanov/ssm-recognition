@@ -9,13 +9,15 @@ from core.model.ssm.ssm_block import SSM_Block
 PRETRAINED_WEIGHTS_PATH = "./data/weights"
 
 model = Model(seq_len=320, num_pred=5, num_classes=10)
-model.load_state_dict(torch.load(
-    os.path.join(PRETRAINED_WEIGHTS_PATH, "experimental_ssm_v2.20_clear_ssm_blocks.pth"),
-    weights_only=True),
-    strict=True
-)
+# model.load_state_dict(torch.load(
+#     os.path.join(PRETRAINED_WEIGHTS_PATH, "experimental_ssm_v3.00_e_014_iou_0.6620_cl_1.0921.pth"),
+#     weights_only=True),
+#     strict=True
+# )
 
 model.to("cuda")
+model.check_stability()
+
 model.eval()
 model.bbox_classifier.ssm_block_1.set_mode(to_rnn=True, device="cuda")
 model.bbox_classifier.ssm_block_2.set_mode(to_rnn=True, device="cuda")
@@ -76,11 +78,11 @@ def draw_output_on_img(cv2_image, output):
 
 
 def show_webcam(mirror=False):
-    #cam = cv2.VideoCapture(0)
+    cam = cv2.VideoCapture(0)
     while True:
-        #ret_val, img = cam.read()
+        ret_val, img = cam.read()
 
-        img = numpy.random.random((480, 720, 3))
+        #img = numpy.random.random((480, 720, 3))
         # time.sleep(0.25)
 
         if mirror:

@@ -48,6 +48,10 @@ class BBoxClassifier(nn.Module):
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
 
+    def check_stability(self):
+        self.ssm_block_1.check_stability()
+        self.ssm_block_2.check_stability()
+
     def forward(self, p3, p4, p5):
         # Обработка P5 -> 14x14
         p5 = F.relu(self.p5_conv1(p5))
