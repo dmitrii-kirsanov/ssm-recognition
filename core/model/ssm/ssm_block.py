@@ -6,28 +6,32 @@ from core.model.ssm.ssm_layer import SSM_Layer
 
 
 class SSM_Block(nn.Module):
-    def __init__(self, seq_len: int, layer_h: int, hidden_states = 64, dropout=0.05):
+
+    def __init__(self, seq_len: int, in_shape: tuple[int, int, int], hidden_states=64, dropout=0.025):
         super().__init__()
+
+        self.channels, self.w, self.h = in_shape
 
         self._seq_len = seq_len
         self._is_mode_cnn = True
 
-        self.ssm_layer = SSM_Layer(layer_h=layer_h, hidden_states=hidden_states, seq_len=seq_len)
-        self.drop = nn.Dropout(dropout)
-        self.linear = nn.Linear(layer_h, layer_h)
+        self.ssm_layer = SSM_Layer(layer_h=self.channels, hidden_states=hidden_states, seq_len=seq_len)
+        self.drop = nn.Dropout(p=dropout)
 
-        self.in_norm = nn.LayerNorm(layer_h)
-        self.out_norm1 = nn.LayerNorm(28 * 28)
-        self.out_norm2 = nn.LayerNorm(28 * 28)
+        #self.linear = nn.Linear(self.channels, self.channels)
+
+        self.in_norm = nn.LayerNorm(self.channels)
+        self.out_norm1 = nn.LayerNorm(self.w * self.h)
+        self.out_norm2 = nn.LayerNorm(self.w * self.h)
 
     @property
     def seq_len(self):
         return self._seq_len if self._is_mode_cnn else 1
 
-    #todo: handle "to CNN" mode
-    def set_mode(self, to_rnn: bool, device, parallel_width=28*28):
+    # todo: handle "to CNN" mode
+    def set_mode(self, to_rnn: bool, device):
         self._is_mode_cnn = not to_rnn
-        self.ssm_layer.set_RNN_mode(parallel_width=parallel_width, device=device)
+        self.ssm_layer.set_RNN_mode(parallel_width=self.w * self.h, device=device)
 
     def check_stability(self):
         print(f"stability of {self.__hash__()}:")
@@ -49,20 +53,20 @@ class SSM_Block(nn.Module):
 
     def forward(self, ix):  # x: [bs, c, w, h]
         input_shape = ix.shape
-        x = self.pre_transform(ix, input_shape)   # [bs * h * w, seq, c]
+        x = self.pre_transform(ix, input_shape)  # [bs * h * w, seq, c]
         x = self.in_norm(x)
 
-        with torch.amp.autocast(self.linear.bias.device.type, enabled=False):
+        with torch.amp.autocast(str(x.device), enabled=False):
             x = self.ssm_layer(x.float())
 
         x = self.drop(nn.functional.gelu(x))
-        x = self.linear(x)
+        #x = self.linear(x)
         x = x * nn.functional.sigmoid(x)
 
-        x = self.drop(x)
-        x = self.post_transform(x, input_shape) # x: [bs, c, w, h]
+        #x = self.drop(x)
+        x = self.post_transform(x, input_shape)  # x: [bs, c, w, h]
 
-        #normalize across w*h
+        # normalize across w*h
         bs, c, w, h = input_shape
         x, ix = x.reshape(bs, c, w * h), ix.reshape(bs, c, w * h)
         x, ix = self.out_norm1(x), self.out_norm2(ix)
@@ -70,6 +74,5 @@ class SSM_Block(nn.Module):
 
         ix = self.drop(ix)
         x = x + ix
-        #print(torch.max(x))
 
         return x

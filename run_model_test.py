@@ -24,12 +24,6 @@ model.bbox_classifier.ssm_block_2.set_mode(to_rnn=True, device="cuda")
 model.bbox_detector.ssm_block_1.set_mode(to_rnn=True, device="cuda")
 model.bbox_detector.ssm_block_2.set_mode(to_rnn=True, device="cuda")
 
-As_eig = list(
-    torch.linalg.eigvals(A).real.max().item() for A in model.bbox_classifier.ssm_block_1.ssm_layer.naive_repr[0])
-print(max(As_eig))
-#exit()
-
-
 threshold = 0.65
 
 markers_info = {  # sorted accordingly to top freq

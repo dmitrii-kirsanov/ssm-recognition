@@ -37,8 +37,8 @@ class BBoxDetector(nn.Module):
             nn.Conv2d(256, num_bboxes * 4, 1)  # 10 bbox * 4 координаты (cxcywh)
         )
 
-        self.ssm_block_1 = SSM_Block(seq_len=l_max, layer_h=256)
-        self.ssm_block_2 = SSM_Block(seq_len=l_max, layer_h=256)
+        self.ssm_block_1 = SSM_Block(seq_len=l_max, in_shape=(256, 28, 28))
+        self.ssm_block_2 = SSM_Block(seq_len=l_max, in_shape=(256, 28, 28))
 
         # Инициализация весов
         self._initialize_weights()

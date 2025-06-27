@@ -4,8 +4,9 @@ import cv2
 import torch
 
 from core.model.backbone.backbone import Backbone2D
-from core.model.bbox_classifier import BBoxClassifier
-from core.model.bbox_detector import BBoxDetector
+from core.model.experimental.classifier import Classifier
+from core.model.experimental.localizator import Localizator
+from core.model.experimental.neck import Neck
 
 
 @torch.compile
@@ -18,8 +19,10 @@ class Model(torch.nn.Module):
         self.num_classes = num_classes
 
         self.backbone = Backbone2D()
-        self.bbox_detector = BBoxDetector(num_bboxes=num_pred, l_max=seq_len)
-        self.bbox_classifier = BBoxClassifier(num_bboxes=num_pred, num_classes=num_classes, l_max=seq_len)
+        self.neck = Neck(num_bboxes=num_pred, num_classes=num_classes, l_max=seq_len)
+        self.localization_head = Localizator(num_bboxes=num_pred)
+        self.classification_head = Classifier(num_bboxes=num_pred, num_classes=num_classes)
+
 
     @property
     def device(self):
@@ -30,8 +33,10 @@ class Model(torch.nn.Module):
         x = x.view(B * SL, 3, H, W)
         p3, p4, p5 = self.backbone(x)
 
-        x_bbox = self.bbox_detector(p3, p4, p5)
-        x_class = self.bbox_classifier(p3, p4, p5)
+        x = self.neck(p3, p4, p5)
+
+        x_bbox = self.localization_head(x)
+        x_class = self.classification_head(x)
 
         x = torch.cat((x_bbox, x_class), dim=-1)
         x = x.view(B, SL, self.num_pred, 4 + self.num_classes)
@@ -39,8 +44,8 @@ class Model(torch.nn.Module):
         return x
 
     def check_stability(self):
-        self.bbox_detector.check_stability()
-        self.bbox_classifier.check_stability()
+        self.neck.check_stability()
+        # ...
 
     def inference(self, cv2_input_image):
         with (torch.no_grad()):
@@ -69,12 +74,12 @@ class Model(torch.nn.Module):
         for p in self.backbone.parameters():
             p.requires_grad = not state
 
-    def freeze_detector(self, state: bool):
-        for p in self.bbox_detector.parameters():
+    def freeze_localization_head(self, state: bool):
+        for p in self.localization_head.parameters():
             p.requires_grad = not state
 
-    def freeze_classifier(self, state: bool):
-        for p in self.bbox_classifier.parameters():
+    def freeze_classification_head(self, state: bool):
+        for p in self.classification_head.parameters():
             p.requires_grad = not state
 
     def load(self, weights_filename, strict=True, WEIGHTS_PATH="./data/weights"):

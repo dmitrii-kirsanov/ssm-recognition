@@ -2,26 +2,27 @@ import torch
 import tqdm
 
 from core.loss.loss import loss_v2
-from core.model.model import Model
+#from core.model.model import Model
+from core.model.experimental.experimental_model import  Model
 from core.util.custom_dataset import CustomDataset
 
 torch.manual_seed(0)
 torch.set_float32_matmul_precision('high')  # warning recommend to do it
 
-version_name = "v3.01"
+version_name = "v4.01_exp_add_cl"
 
 criterion, batch_size = loss_v2, 1
 num_epochs, num_videos = 100, 29
-seconds_seq_len, fps = 80, 4
+seconds_seq_len, fps = 50, 4
 startup_epoch = 0
 
-classes_num, pred_num = 10, 5
+classes_num, pred_num = 10, 8
 
 model = Model(seq_len=seconds_seq_len*fps, num_pred=pred_num, num_classes=classes_num)
-model.load_pretrain_backbone("./data/pretrain/v8_m.pth")
-#model.load("experimental_ssm_v2.20_clear_ssm_blocks.pth", strict=False)
-model.freeze_backbone(True)
-model.freeze_classifier(True)
+#model.load_pretrain_backbone("./data/pretrain/v8_m.pth")
+model.load("experimental_ssm_v4.01_exp_add_cl_e_001_iou_0.7475_cl_0.1575.pth", strict=True)
+#model.freeze_classification_head(True)
+#model.freeze_localization_head(True)
 model.to("cuda")
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-4)
@@ -49,8 +50,8 @@ for epoch_id in range(num_epochs):
             _, _, m, pt = targets.shape
             loss, avg_target_iou, class_loss, precision, recall = criterion(outputs.reshape(b * sl, n, po), targets.reshape(b * sl, m, pt),
                                                          num_classes=10,
-                                                         k_bbox_loss=1.0, k_class_loss=0.0,
-                                                         threshold_iou_for_class_loss=1.0)
+                                                         k_bbox_loss=0.01 * 0.1, k_class_loss=0.99 * 2, # 1 to 100 on avg (iou 75, cl -)
+                                                         threshold_iou_for_class_loss=0.6)
 
         scaler.scale(loss).backward()
         scaler.step(optimizer)

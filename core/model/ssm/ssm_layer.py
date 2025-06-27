@@ -223,7 +223,7 @@ class SSM_Layer(nn.Module):
         return y[:, :self.L]
 
     # RNN forward для 1 скалярной величины
-    # с поддержной обработки параллельных потоков данных
+    # с поддержкой одинаковой обработки параллельных потоков данных
     def forward_naive_scalar(self, A, B, C, x, u):
 
         def _scalar(_x, _u):

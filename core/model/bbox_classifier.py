@@ -37,8 +37,8 @@ class BBoxClassifier(nn.Module):
             nn.Conv2d(256, num_bboxes * num_classes, 1)  # [B, num_bboxes*num_classes, H, W]
         )
 
-        self.ssm_block_1 = SSM_Block(seq_len=l_max, layer_h=256)
-        self.ssm_block_2 = SSM_Block(seq_len=l_max, layer_h=256)
+        self.ssm_block_1 = SSM_Block(seq_len=l_max, in_shape=(256, 28, 28))
+        self.ssm_block_2 = SSM_Block(seq_len=l_max, in_shape=(256, 28, 28))
         self._initialize_weights()
 
     def _initialize_weights(self):

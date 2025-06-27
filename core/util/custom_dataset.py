@@ -78,7 +78,7 @@ class CustomDataset(torch.utils.data.Dataset):
         images = [torch.Tensor(cv2.imread(image)).permute(2, 0, 1) for image in images]
         images = torch.stack(images, dim=0)
 
-        images, labels = images.to(self.device), labels.to(self.device)
+        images, labels = images.to(self.device, non_blocking=True), labels.to(self.device, non_blocking=True)
 
         images[:, 0, :, :] = (images[:, 0, :, :] / 255.0 - 0.485) / 0.229  # R
         images[:, 1, :, :] = (images[:, 1, :, :] / 255.0 - 0.456) / 0.224  # G
